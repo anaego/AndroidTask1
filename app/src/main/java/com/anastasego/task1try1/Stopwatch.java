@@ -17,7 +17,6 @@ public class Stopwatch {
     private AtomicLong stopwatch = new AtomicLong(0);
     // is it a good idea to make this final?
     private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-    // should it be atomic boolean? or would just boolean do? the same with all other atomics
     private AtomicBoolean stopwatchStopped = new AtomicBoolean(true);
     private ConcurrentHashMap<String, StopwatchUser> observingUsers = new ConcurrentHashMap<>();
 
@@ -27,10 +26,11 @@ public class Stopwatch {
         public void run() {
             // only one thread can (is supposed to) access this code, thus not synchronized/locked
             if (!stopwatchStopped.get()) {
-                observingUsers.forEach((k, v) -> v.setStopwatchValueReceiver(stopwatch.get()));
-                System.out.println("---------- STOPWATCH thread id: "
-                        + Thread.currentThread().getId() + ", actual value: " + stopwatch.get());
                 stopwatch.incrementAndGet();
+                observingUsers.forEach((k, v) -> v.setStopwatchValueReceiver(stopwatch.get()));
+                observingUsers.forEach((k, v) -> v.setStopwatchUpdated());
+                System.out.println("--- STOPWATCH thread id: "
+                        + Thread.currentThread().getId() + ", actual value: " + stopwatch.get());
             }
         }
     };
@@ -68,12 +68,13 @@ public class Stopwatch {
     }
 
     // synchronized because this code should be done in one piece
-    synchronized void stopStopwatch(StopwatchUser user) {
+    synchronized long stopStopwatch(StopwatchUser user) {
         observingUsers.remove(user.getUserID());
         user.setStopwatchStarted(false);
         if (observingUsers.isEmpty()) {
             stopwatchStopped.set(true);
         }
+        return stopwatch.get();
     }
 
     long getStopwatch() {
